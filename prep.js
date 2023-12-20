@@ -1,31 +1,39 @@
 const fs = require("fs");
-const mkdirp = require("mkdirp");
+//const { mkdirp } = require("mkdirp");
 
-const bundleDir = "bundles/Bundle";
-const saveDir = "bundles/submit";
+function mkdir( dirPath ) {
+  const isExists = fs.existsSync( dirPath );
+  if( !isExists ) {
+      fs.mkdirSync( dirPath, { recursive: true } );
+  }
+}
 
-const saveBundle = (bundle, id) => {
-  mkdirp(saveDir, err => {
-    const filename = `Bundle.${id}.submit.json`;
+const resources = ["Condition", "Device", "DeviceUseStatement"];
+//ConceptMap, DocumentReference, MedicationRequest, OperationDefinition, Practitioner
+//const resources = ["AllergyIntolerance", "Condition", "Device", "DeviceUseStatement", "Encounter", "Immunization", "Medication", "MedicationStatement", "Observation", "Organization", "Patient", "Procedure"];
+const dataDir = "bundles";
 
-    fs.writeFile(
-      `${saveDir}/${filename}`,
-      JSON.stringify(bundle, null, 2),
-      err => {
-        if (err) throw err;
-        console.log(`Wrote: ${saveDir}/${filename}`);
-      }
-    );
-  });
+
+const saveBundle = (bundle, id, resource) => {
+  const saveDir = `bundles/submit/${resource}`;
+  mkdir(saveDir)
+  const filename = `${resource}.${id}.submit.json`;
+
+  fs.writeFileSync(
+    `${saveDir}/${filename}`,
+    JSON.stringify(bundle, null, 2)
+  );
+  console.log(`Wrote: ${saveDir}/${filename}`);
 };
 
-const prepBundle = bundle => {
+const prepBundle = (bundle, resource) => {
   const submitBundle = {
     resourceType: "Bundle",
     type: "batch"
   };
 
   submitBundle.entry = bundle.entry.map(entry => {
+    entry.resource.id = `A${entry.resource.id}`;
     return {
       request: {
         method: "PUT",
@@ -35,21 +43,26 @@ const prepBundle = bundle => {
     };
   });
 
-  saveBundle(submitBundle, bundle.id);
+  saveBundle(submitBundle, bundle.id, resource);
 };
 
 const prep = () => {
-  fs.readdir(bundleDir, function(err, items) {
-    items.forEach(item => {
-      fs.readFile(`${bundleDir}/${item}`, (err, data) => {
-        if (err) throw err;
+  for(let resource of resources) {
+    console.log(resource);
+    const bundleDir = `${dataDir}/${resource}`;
+    const filelist = fs.readdirSync(bundleDir);
 
-        const bundle = JSON.parse(data);
+    for(item of filelist){
+      const data = fs.readFileSync(`${bundleDir}/${item}`);
 
-        prepBundle(bundle);
+      const bundle = JSON.parse(data, (key, value) => {
+        if (key === 'reference') return value.replace('/','/A');
+        return value;
       });
-    });
-  });
+
+      prepBundle(bundle, resource);
+    }
+  }
 };
 
 prep();

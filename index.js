@@ -1,12 +1,16 @@
 const fetch = require("node-fetch");
-const mkdirp = require("mkdirp");
+const { mkdirp } = require("mkdirp");
 const fs = require("fs");
 
-const resources = ["Patient", "Encounter", "Condition", "Procedure"];
-const count = 1000;
+const resources = ["Immunization", "Medication", "MedicationStatement"];
+//ConceptMap, DocumentReference, MedicationRequest, OperationDefinition, Practitioner
+//const resources = ["AllergyIntolerance", "Condition", "Device", "DeviceUseStatement", "Encounter", "Immunization", "Medication", "MedicationStatement", "Observation", "Organization", "Patient", "Procedure"];
+const count = 100000;
 
-const fhirBaseUrl =
-  "http://local.psbrandt.io:9876/omoponfhir-stu3-server/fhir/";
+const fhirBaseUrl = "http://***.***.***.***:****/omoponfhir4/fhir";
+const headers = new Headers();
+const base64 = require('base-64');
+headers.set('Authorization', 'Basic ' + base64.encode("username:password"));
 
 const dataDir = "bundles";
 
@@ -16,18 +20,15 @@ const findNext = links => {
   return !next ? next : next.url;
 };
 
-const saveResource = resource => {
-  const type = resource.resourceType;
-  const id = resource.id;
+const saveResource = (bundle, resource) => {
+  const dirName = `${dataDir}/${resource}`;
 
-  const dirName = `${dataDir}/${type}`;
-
-  mkdirp(dirName, err => {
-    const filename = `${type}.${id}.json`;
+  mkdirp(dirName).then( err => {
+    const filename = `${resource}.${bundle.id}.json`;
 
     fs.writeFile(
       `${dirName}/${filename}`,
-      JSON.stringify(resource, null, 2),
+      JSON.stringify(bundle, null, 2),
       err => {
         if (err) throw err;
         console.log(`Wrote: ${dirName}/${filename}`);
@@ -36,8 +37,8 @@ const saveResource = resource => {
   });
 };
 
-const extractBundle = bundle => {
-  saveResource(bundle);
+const extractBundle = (bundle, resource) => {
+  saveResource(bundle, resource);
 
   return findNext(bundle.link);
 };
@@ -48,16 +49,20 @@ const extractResource = async resource => {
   do {
     console.log(`Fetching ${next}`);
 
-    next = await fetch(next)
+    next = await fetch(next, {headers: headers})
       .then(res => res.json())
-      .then(bundle => extractBundle(bundle));
+      .then(bundle => extractBundle(bundle, resource));
   } while (next != null);
 };
 
-const extract = () => {
-  resources.forEach(resource => {
-    extractResource(resource);
-  });
+const extract = async () => {
+// OMOPonFHIR 가 병렬 수행이 안되는 것 같음.
+//  resources.forEach(resource => {
+//    extractResource(resource);
+//  });
+  for(let resource of resources) {
+    await extractResource(resource);
+  }
 };
 
 extract();

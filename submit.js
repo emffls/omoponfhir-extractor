@@ -2,8 +2,12 @@ const fs = require("fs").promises;
 const fetch = require("node-fetch");
 const mapLimit = require("async/mapLimit");
 
-const dataDir = "./bundles/submit";
-const fhirBaseUrl = "http://local.psbrandt.io:9876/hapi-fhir-jpaserver/fhir";
+const resources = ["Condition", "Device", "DeviceUseStatement"];
+//ConceptMap, DocumentReference, MedicationRequest, OperationDefinition, Practitioner
+//const resources = ["AllergyIntolerance", "Condition", "Device", "DeviceUseStatement", "Encounter", "Immunization", "Medication", "MedicationStatement", "Observation", "Organization", "Patient", "Procedure"];
+const dataDir = "bundles/submit";
+
+const fhirBaseUrl = "http://***.***.***.***:****/fhir";
 const batchSize = 10;
 
 const submitBundle = (bundle, filename) => {
@@ -22,15 +26,15 @@ const submitBundle = (bundle, filename) => {
   });
 };
 
-const submitBatches = bundleFilenames => {
+const submitBatches = (submitDir, bundleFilenames) => {
   mapLimit(
     bundleFilenames,
     batchSize,
     async function(bundleFilename) {
-      console.log(`Reading ${dataDir}/${bundleFilename}`);
+      console.log(`Reading ${submitDir}/${bundleFilename}`);
 
       return fs
-        .readFile(`${dataDir}/${bundleFilename}`)
+        .readFile(`${submitDir}/${bundleFilename}`)
         .then(bundle => submitBundle(bundle, bundleFilename));
     },
     (err, results) => {
@@ -42,19 +46,22 @@ const submitBatches = bundleFilenames => {
 };
 
 const submit = () => {
-  const bundleFilenames = [];
+  resources.forEach(resource => {
+    const submitDir = `${dataDir}/${resource}`;
+    const bundleFilenames = [];
 
-  fs.readdir(dataDir)
-    .then(items => {
-      items.forEach(item => {
-        bundleFilenames.push(item);
+    fs.readdir(submitDir)
+      .then(items => {
+        items.forEach(item => {
+          bundleFilenames.push(item);
+        });
+
+        submitBatches(submitDir, bundleFilenames);
+      })
+      .catch(e => {
+        console.log(`Error submitting: ${e}`);
       });
-
-      submitBatches(bundleFilenames);
-    })
-    .catch(e => {
-      console.log(`Error submitting: ${e}`);
-    });
+  });
 };
 
 submit();
